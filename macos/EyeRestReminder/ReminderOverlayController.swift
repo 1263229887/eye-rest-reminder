@@ -93,15 +93,23 @@ struct ReminderOverlayView: View {
     }
 
     private var message: String {
-        kind == .short
-            ? "看向约 6 米以外，让眼睛自然放松。"
-            : "离开屏幕走一走，舒展肩颈和腰背。"
+        switch kind {
+        case .short:
+            return "看向约 6 米以外，让眼睛自然放松。"
+        case .long:
+            return "离开屏幕走一走，舒展肩颈和腰背。"
+        case .both:
+            return "看向约 6 米以外，让眼睛自然放松。\n然后离开屏幕走一走，舒展肩颈和腰背。"
+        }
     }
 
     private var total: Int {
-        kind == .short
-            ? scheduler.settings.shortDurationSeconds
-            : scheduler.settings.longDurationMinutes * 60
+        switch kind {
+        case .short:
+            return scheduler.settings.shortDurationSeconds
+        case .long, .both:
+            return scheduler.settings.longDurationMinutes * 60
+        }
     }
 
     private func time(_ seconds: Int) -> String {

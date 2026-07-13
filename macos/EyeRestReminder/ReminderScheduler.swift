@@ -16,9 +16,12 @@ final class ReminderScheduler: ObservableObject {
     @Published var isEnabled = true
     @Published private(set) var reminderEndDate: Date?
 
-    enum ReminderKind: String { case short = "小休息"; case long = "大休息" }
+    enum ReminderKind: String { case short = "小休息"; case long = "大休息"; case both = "小休息 + 大休息" }
     private var timer: Timer?
-    @Published private(set) var elapsedSeconds = 0
+    /// 小休息独立计时，不受大休息跳过影响
+    @Published private(set) var shortElapsed = 0
+    /// 大休息独立计时，不受小休息跳过影响
+    @Published private(set) var longElapsed = 0
     private let defaults = UserDefaults.standard
     private let settingsKey = "reminderSettings"
     private let enabledKey = "remindersEnabled"
@@ -55,12 +58,21 @@ final class ReminderScheduler: ObservableObject {
             return
         }
 
-        elapsedSeconds += 1
-        let longInterval = max(1, settings.longIntervalMinutes) * 60
+        shortElapsed += 1
+        longElapsed += 1
+
         let shortInterval = max(1, settings.shortIntervalMinutes) * 60
-        if elapsedSeconds % longInterval == 0 {
+        let longInterval = max(1, settings.longIntervalMinutes) * 60
+
+        let shouldShort = shortElapsed % shortInterval == 0
+        let shouldLong = longElapsed % longInterval == 0
+
+        if shouldShort && shouldLong {
+            // 同时到期，以大休息为准并合并展示
+            begin(.both, seconds: settings.longDurationMinutes * 60)
+        } else if shouldLong {
             begin(.long, seconds: settings.longDurationMinutes * 60)
-        } else if elapsedSeconds % shortInterval == 0 {
+        } else if shouldShort {
             begin(.short, seconds: settings.shortDurationSeconds)
         }
     }
@@ -76,11 +88,13 @@ final class ReminderScheduler: ObservableObject {
         activeReminder = nil
         remainingSeconds = 0
         reminderEndDate = nil
-        elapsedSeconds = 0
+        // 不重置 shortElapsed / longElapsed，让各自计时器独立累计
     }
 
     func reset() {
         skip()
+        shortElapsed = 0
+        longElapsed = 0
         start()
     }
 
@@ -112,13 +126,23 @@ final class ReminderScheduler: ObservableObject {
             : max(1, settings.shortIntervalMinutes) * 60
     }
 
-    private var secondsUntilShort: Int {
-        let interval = max(1, settings.shortIntervalMinutes) * 60
-        return interval - (elapsedSeconds % interval)
+    /// 小休息间隔（秒）
+    var shortInterval: Int {
+        max(1, settings.shortIntervalMinutes) * 60
     }
 
-    private var secondsUntilLong: Int {
+    /// 大休息间隔（秒）
+    var longInterval: Int {
+        max(1, settings.longIntervalMinutes) * 60
+    }
+
+    var secondsUntilShort: Int {
+        let interval = max(1, settings.shortIntervalMinutes) * 60
+        return interval - (shortElapsed % interval)
+    }
+
+    var secondsUntilLong: Int {
         let interval = max(1, settings.longIntervalMinutes) * 60
-        return interval - (elapsedSeconds % interval)
+        return interval - (longElapsed % interval)
     }
 }

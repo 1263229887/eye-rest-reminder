@@ -15,10 +15,10 @@ struct EyeRestReminderApp: App {
     var body: some Scene {
         Window("护眼提醒", id: "main") {
             ContentView(scheduler: scheduler, launchAtLogin: launchAtLogin)
-                .frame(minWidth: 420, minHeight: 360)
+                .frame(minWidth: 420, minHeight: 520)
                 .padding(24)
         }
-        .defaultSize(width: 480, height: 420)
+        .defaultSize(width: 480, height: 560)
 
         MenuBarExtra("护眼提醒", systemImage: "eye") {
             MenuBarContentView(scheduler: scheduler, launchAtLogin: launchAtLogin)

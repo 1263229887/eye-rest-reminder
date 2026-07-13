@@ -5,6 +5,7 @@ struct ContentView: View {
     @ObservedObject var scheduler: ReminderScheduler
     @ObservedObject var launchAtLogin: LaunchAtLoginController
     var compact = false
+    @FocusState private var isTextFieldActive: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -26,34 +27,55 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             } else if let kind = scheduler.activeReminder {
                 Text(kind.rawValue).font(.title3)
-                Text(time(scheduler.remainingSeconds)).font(.system(size: 42, weight: .semibold, design: .rounded))
+                Text(time(scheduler.remainingSeconds))
+                    .font(.system(size: compact ? 36 : 52, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
                 ProgressView(value: Double(scheduler.remainingSeconds), total: Double(total(for: kind)))
+                    .tint(.secondary)
                 Button("跳过休息") { scheduler.skip() }
                     .keyboardShortcut(.cancelAction)
             } else {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text("距离下一次\(scheduler.nextReminder.rawValue)")
+                        Text("距离下一次小休息")
                             .foregroundStyle(.secondary)
+                            .font(.subheadline)
                         Spacer()
                         Button("重置") { scheduler.reset() }
                             .buttonStyle(.link)
+                            .controlSize(.small)
                     }
-                    Text(time(scheduler.secondsUntilNextReminder))
-                        .font(.system(size: compact ? 36 : 52, weight: .semibold, design: .rounded))
+                    Text(time(scheduler.secondsUntilShort))
+                        .font(.system(size: compact ? 30 : 44, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                     ProgressView(
-                        value: Double(scheduler.nextReminderInterval - scheduler.secondsUntilNextReminder),
-                        total: Double(scheduler.nextReminderInterval)
+                        value: Double(scheduler.shortInterval - scheduler.secondsUntilShort),
+                        total: Double(scheduler.shortInterval)
                     )
+                    .tint(.secondary)
                 }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("距离下一次大休息")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                    Text(time(scheduler.secondsUntilLong))
+                        .font(.system(size: compact ? 30 : 44, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                    ProgressView(
+                        value: Double(scheduler.longInterval - scheduler.secondsUntilLong),
+                        total: Double(scheduler.longInterval)
+                    )
+                    .tint(.secondary)
+                }
+
                 if !compact {
                     Divider()
                     VStack(spacing: 10) {
-                        NumberSettingRow(title: "小休息间隔", value: $scheduler.settings.shortIntervalMinutes, range: 1...240, unit: "分钟")
-                        NumberSettingRow(title: "小休息时长", value: $scheduler.settings.shortDurationSeconds, range: 5...300, unit: "秒")
-                        NumberSettingRow(title: "大休息间隔", value: $scheduler.settings.longIntervalMinutes, range: 1...480, unit: "分钟")
-                        NumberSettingRow(title: "大休息时长", value: $scheduler.settings.longDurationMinutes, range: 1...60, unit: "分钟")
+                        NumberSettingRow(title: "小休息间隔", value: $scheduler.settings.shortIntervalMinutes, range: 1...240, unit: "分钟", isFocused: $isTextFieldActive)
+                        NumberSettingRow(title: "小休息时长", value: $scheduler.settings.shortDurationSeconds, range: 5...300, unit: "秒", isFocused: $isTextFieldActive)
+                        NumberSettingRow(title: "大休息间隔", value: $scheduler.settings.longIntervalMinutes, range: 1...480, unit: "分钟", isFocused: $isTextFieldActive)
+                        NumberSettingRow(title: "大休息时长", value: $scheduler.settings.longDurationMinutes, range: 1...60, unit: "分钟", isFocused: $isTextFieldActive)
                     }
                     Divider()
                     Toggle("开机时自动启动", isOn: Binding(
@@ -71,6 +93,9 @@ struct ContentView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onTapGesture { isTextFieldActive = false }
         .onChange(of: scheduler.settings.shortIntervalMinutes) { _ in scheduler.saveSettings() }
         .onChange(of: scheduler.settings.shortDurationSeconds) { _ in scheduler.saveSettings() }
         .onChange(of: scheduler.settings.longIntervalMinutes) { _ in scheduler.saveSettings() }
@@ -79,7 +104,10 @@ struct ContentView: View {
 
     private func time(_ seconds: Int) -> String { String(format: "%02d:%02d", seconds / 60, seconds % 60) }
     private func total(for kind: ReminderScheduler.ReminderKind) -> Int {
-        kind == .short ? scheduler.settings.shortDurationSeconds : scheduler.settings.longDurationMinutes * 60
+        switch kind {
+        case .short: return scheduler.settings.shortDurationSeconds
+        case .long, .both: return scheduler.settings.longDurationMinutes * 60
+        }
     }
 }
 
@@ -88,6 +116,7 @@ private struct NumberSettingRow: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
     let unit: String
+    var isFocused: FocusState<Bool>.Binding
 
     var body: some View {
         HStack {
@@ -97,6 +126,7 @@ private struct NumberSettingRow: View {
                 .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
                 .frame(width: 72)
+                .focused(isFocused)
                 .onSubmit { value = min(max(value, range.lowerBound), range.upperBound) }
             Text(unit)
                 .foregroundStyle(.secondary)
